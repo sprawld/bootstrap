@@ -8,6 +8,32 @@
 module.exports = function (grunt) {
   'use strict';
 
+
+  /* HACK by @sprawl - allows config.json to be used to customize bootstrap dist
+   * All changes to original Gruntfile are marked with "HACK by @sprawld" comments
+   * All variables begin sprawld
+   */
+
+	var sprawldConfig = (grunt.file.exists('config.json')) ?  grunt.file.readJSON('config.json') : false;
+	var sprawldJS = sprawldConfig ? sprawldConfig.js : [
+          'js/transition.js',
+          'js/alert.js',
+          'js/button.js',
+          'js/carousel.js',
+          'js/collapse.js',
+          'js/dropdown.js',
+          'js/modal.js',
+          'js/tooltip.js',
+          'js/popover.js',
+          'js/scrollspy.js',
+          'js/tab.js',
+          'js/affix.js'
+        ];
+	var sprawldLess = sprawldConfig ? 'less/bootstrap-custom.less' : 'less/bootstrap.less';
+
+  /* /HACK */
+
+
   // Force use of Unix newlines
   grunt.util.linefeed = '\n';
 
@@ -105,20 +131,7 @@ module.exports = function (grunt) {
         stripBanners: false
       },
       bootstrap: {
-        src: [
-          'js/transition.js',
-          'js/alert.js',
-          'js/button.js',
-          'js/carousel.js',
-          'js/collapse.js',
-          'js/dropdown.js',
-          'js/modal.js',
-          'js/tooltip.js',
-          'js/popover.js',
-          'js/scrollspy.js',
-          'js/tab.js',
-          'js/affix.js'
-        ],
+        src: sprawldJS,						/* HACK by @sprawld */
         dest: 'dist/js/<%= pkg.name %>.js'
       }
     },
@@ -157,7 +170,7 @@ module.exports = function (grunt) {
           sourceMapURL: '<%= pkg.name %>.css.map',
           sourceMapFilename: 'dist/css/<%= pkg.name %>.css.map'
         },
-        src: 'less/bootstrap.less',
+        src: sprawldLess,						/* HACK by @sprawld */
         dest: 'dist/css/<%= pkg.name %>.css'
       },
       compileTheme: {
@@ -401,8 +414,159 @@ module.exports = function (grunt) {
           }
         ]
       }
-    }
+    },
 
+  /* HACK by @sprawld
+   * Runs a series of hacky replacements on variables.less and bootstrap.less according to custom.json
+   */
+
+	replace: {
+		prepVars: {
+			options: {
+				patterns: [
+				{
+					match: /@([^:;\n\r@\/\*]+):([^;\n\r]+);/g,
+					replacement: '@$1\t@@@$1:$2;'
+				},
+				{
+					match: /\t/g,
+					replacement: ''
+				},
+				]
+			},
+			files: [
+				{src: 'less/variables.less', dest: 'less/variables-custom.less'}
+			]
+		},
+
+		changeVars: {
+			options: {
+				patterns: [
+				{
+					json: function(done) {
+						done(sprawldConfig.vars);
+					}
+				}
+				]
+			},
+			files: [
+				{src: 'less/variables-custom.less', dest: 'less/variables-custom.less'}
+			]
+		},
+
+		cleanVars: {
+			options: {
+				patterns: [
+				{
+					match: /\t@@@[^:]*:/g,
+					replacement: ':'
+				}
+				]
+			},
+			files: [
+				{src: 'less/variables-custom.less', dest: 'less/variables-custom.less'}
+			]
+		},
+		finishVars: {
+			options: {
+				patterns: [
+				{
+					match: /\t([^:]*):[^;\n\r]+;/g,
+					replacement: ':$1;'
+				},
+				]
+			},
+			files: [
+				{src: 'less/variables-custom.less', dest: 'less/variables-custom.less'}
+			]
+		},
+
+		prepLess: {
+			options: {
+				patterns: [
+				{
+					match: /@import[ \t]*"([^"]*)";/g,
+					replacement: '#import @@$1;'
+				},
+				]
+			},
+			files: [
+				{src: 'less/bootstrap.less', dest: 'less/bootstrap-custom.less'}
+			]
+		},
+		
+		changeLess: {
+			options: {
+				patterns: [
+
+				{
+					json: function(done) {
+						var tempCSS = {};
+						for(var i=0;i<sprawldConfig.css.length;i++) {
+							tempCSS[sprawldConfig.css[i]] = sprawldConfig.css[i];
+						}
+						done(tempCSS);
+					}
+				}				
+				]
+			},
+			files: [
+				{src: 'less/bootstrap-custom.less', dest: 'less/bootstrap-custom.less'}
+			]
+		},
+
+		cleanLess: {
+			options: {
+				patterns: [
+				{
+					match: '#import @@variables.less;',
+					replacement: '@import "variables-custom.less";'
+				},
+				{
+					match: '#import @@mixins.less;',
+					replacement: '@import "mixins.less";'
+				},
+				{
+					match: '#import @@normalize.less;',
+					replacement: '@import "normalize.less";'
+				},
+				{
+					match: '#import @@scaffolding.less;',
+					replacement: '@import "scaffolding.less";'
+				},
+				{
+					match: '#import @@utilities.less;',
+					replacement: '@import "utilities.less";'
+				},
+				],
+			usePrefix: false,
+			},
+			files: [
+				{src: 'less/bootstrap-custom.less', dest: 'less/bootstrap-custom.less'}
+			]
+		},
+		
+		finishLess: {
+			options: {
+				patterns: [
+				{
+					match: /#import @@[a-z0-9\-]*\.less;/g,
+					replacement: ''
+				},
+				{
+					match: /#import ([a-z0-9\-]*\.less);/g,
+					replacement: '@import "$1";'
+				}
+			]
+			},
+			files: [
+				{src: 'less/bootstrap-custom.less', dest: 'less/bootstrap-custom.less'}
+			]
+		},		
+	},
+   
+	/*  /HACK  */
+	
   });
 
 
@@ -456,6 +620,21 @@ module.exports = function (grunt) {
   // Full distribution task.
   grunt.registerTask('dist', ['clean:dist', 'dist-css', 'copy:fonts', 'dist-js']);
 
+  
+  /* HACK by @sprawld - add in 'config' task */
+  grunt.registerTask('config', function() {
+	if(sprawldConfig) {
+		grunt.task.run([
+		'replace:prepVars','replace:changeVars','replace:cleanVars','replace:finishVars','replace:prepLess','replace:changeLess', 'replace:cleanLess', 'replace:finishLess',
+		'dist']);
+	} else {
+		grunt.fail.warn("config.json not found");
+	}
+  });
+  
+  /* /HACK */
+
+  
   // Default task.
   grunt.registerTask('default', ['clean:dist', 'copy:fonts', 'test']);
 
